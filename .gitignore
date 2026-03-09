@@ -1,0 +1,19 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+xcuserdata/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Build artifacts
+bootstrap
+function.zip
+api/passkey-api
+enclave/passkey-enclave
+infra/node_modules
+infra/cdk.out

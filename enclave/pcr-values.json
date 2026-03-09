@@ -1,0 +1,7 @@
+{
+  "build": "2026-03-09T08:22:00Z",
+  "PCR0": "476fa02ff284834e3891edbab196a7e67fbe88d1a736ad50f44e319d69d2627999f857bdb7187b3049edce45fcca7efa",
+  "PCR1": "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
+  "PCR2": "a56999d0e4f996a3c796cd16410d375dbf738461064a6396197fdae8a8e3fbff1da91d2b4f4ac1867013c620168caf64",
+  "note": "PCR values change with every code change. Update this file after each enclave rebuild."
+}
