@@ -40,6 +40,23 @@ iOS App (Swift)
 
 The full private key never exists in memory on either side. During signing, each party produces a partial Schnorr signature; the enclave aggregates them into a standard signature verifiable with the group public key.
 
+### Security Model
+
+This is a **split-key custody** system — neither the user nor the server can sign alone. It sits between full self-custody and traditional custodial services.
+
+**What's guaranteed:**
+- The user's signing share never leaves their device (derived from WebAuthn PRF, protected by biometrics)
+- The enclave's signing share is sealed to attested code (KMS bound to PCR0)
+- Both shares are required to produce a valid signature — a compromised server alone cannot sign
+- Enclave code is open source and the attestation hash (PCR0) is publicly verifiable
+
+**What requires trust:**
+- The operator controls the KMS key policy and can redeploy the enclave with different code
+- The web frontend is served by the operator (the iOS app, distributed via App Store, avoids this)
+- Users trust that the published source matches what's running (attestation proves it at any point in time, but doesn't prevent future changes)
+
+**Comparable to:** Fireblocks, Turnkey, Fordefi — institutional MPC/enclave wallets that split keys between client and server-side secure hardware. Stronger than custodial exchanges where the operator holds all keys.
+
 ### Signal Protocol Keys (per credential)
 
 Each passkey/device gets its own Signal key set for future E2E messaging:

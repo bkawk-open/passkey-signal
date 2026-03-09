@@ -31,12 +31,34 @@ if [ -n "$CURRENT_ENV" ] && [ "$CURRENT_ENV" != "" ]; then
         --query "FunctionName" --output text 2>/dev/null || true
 fi
 
+# Empty and delete the enclave deploy S3 bucket (CDK can't delete non-empty buckets)
+DEPLOY_BUCKET=$(aws cloudformation describe-stack-resource \
+    --stack-name PasskeySignalEnclaveStack \
+    --logical-resource-id DeployBucket67E2C076 \
+    --query "StackResourceDetail.PhysicalResourceId" --output text 2>/dev/null || echo "")
+if [ -n "$DEPLOY_BUCKET" ]; then
+    echo "    Emptying S3 bucket '$DEPLOY_BUCKET'..."
+    aws s3 rm "s3://$DEPLOY_BUCKET" --recursive 2>/dev/null || true
+fi
+
 # Destroy enclave stack (ignore if already gone)
 ENCLAVE_STACK=$(aws cloudformation describe-stacks --stack-name PasskeySignalEnclaveStack \
     --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "GONE")
-if [ "$ENCLAVE_STACK" != "GONE" ]; then
+if [ "$ENCLAVE_STACK" = "DELETE_FAILED" ]; then
+    echo "    Enclave stack in DELETE_FAILED state, retrying..."
+    aws cloudformation delete-stack --stack-name PasskeySignalEnclaveStack
+    aws cloudformation wait stack-delete-complete --stack-name PasskeySignalEnclaveStack 2>/dev/null || true
+elif [ "$ENCLAVE_STACK" != "GONE" ]; then
     cd "$INFRA_DIR"
-    npx cdk destroy PasskeySignalEnclaveStack --force
+    npx cdk destroy PasskeySignalEnclaveStack --force || {
+        echo "    CDK destroy failed, attempting direct CloudFormation delete..."
+        # Likely the S3 bucket issue — empty any remaining buckets and retry
+        if [ -n "$DEPLOY_BUCKET" ]; then
+            aws s3 rm "s3://$DEPLOY_BUCKET" --recursive 2>/dev/null || true
+        fi
+        aws cloudformation delete-stack --stack-name PasskeySignalEnclaveStack
+        aws cloudformation wait stack-delete-complete --stack-name PasskeySignalEnclaveStack 2>/dev/null || true
+    }
 else
     echo "    Enclave stack already destroyed."
 fi
