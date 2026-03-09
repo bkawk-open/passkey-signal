@@ -57,7 +57,6 @@ export class PasskeySignalEnclaveStack extends cdk.Stack {
     const deployBucket = new s3.Bucket(this, 'DeployBucket', {
       bucketName: `passkey-signal-enclave-deploy-${this.account}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
       lifecycleRules: [{ expiration: cdk.Duration.days(1) }],
     });
 

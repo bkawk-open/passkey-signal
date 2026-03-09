@@ -17,3 +17,5 @@ api/passkey-api
 enclave/passkey-enclave
 infra/node_modules
 infra/cdk.out
+web/frost.wasm
+web/wasm_exec.js

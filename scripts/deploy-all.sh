@@ -6,11 +6,43 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 INFRA_DIR="$(dirname "$SCRIPT_DIR")/infra"
+REGION="us-east-1"
+KEY_PAIR_NAME="passkey-signal"
 
 echo "============================================"
 echo "  passkey-signal: Full Stack Deploy"
 echo "============================================"
 echo ""
+
+# -- Pre-flight checks --
+
+echo "==> Pre-flight checks..."
+
+# Ensure EC2 key pair exists
+if ! aws ec2 describe-key-pairs --key-names "$KEY_PAIR_NAME" --region "$REGION" >/dev/null 2>&1; then
+    echo "    Creating EC2 key pair '$KEY_PAIR_NAME'..."
+    aws ec2 create-key-pair --key-name "$KEY_PAIR_NAME" --key-type ed25519 --region "$REGION" \
+        --query "KeyMaterial" --output text > "/tmp/${KEY_PAIR_NAME}.pem"
+    chmod 600 "/tmp/${KEY_PAIR_NAME}.pem"
+    echo "    Key pair created. Private key saved to /tmp/${KEY_PAIR_NAME}.pem"
+else
+    echo "    EC2 key pair '$KEY_PAIR_NAME' exists."
+fi
+
+# Clean up any ROLLBACK_COMPLETE enclave stack
+STACK_STATUS=$(aws cloudformation describe-stacks --stack-name PasskeySignalEnclaveStack --region "$REGION" \
+    --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+    echo "    Deleting failed enclave stack (ROLLBACK_COMPLETE)..."
+    aws cloudformation delete-stack --stack-name PasskeySignalEnclaveStack --region "$REGION"
+    aws cloudformation wait stack-delete-complete --stack-name PasskeySignalEnclaveStack --region "$REGION"
+    echo "    Deleted."
+fi
+
+echo "    Pre-flight OK."
+echo ""
+
+# -- Step 1: Main stack --
 
 echo "==> Step 1/3: Deploying main stack (VPC, Lambda, DynamoDB, CloudFront)..."
 cd "$INFRA_DIR"

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -137,24 +136,24 @@ func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 		resp, err = handleDeleteDevice(ctx, dbClient, request.Headers, request.Body)
 	case "GET /devices":
 		resp, err = handleListDevices(ctx, dbClient, request.Headers)
-	case "POST /v1/dkg/session":
-		resp, err = handleDKGSession(ctx, dbClient, request.Headers)
-	case "POST /v1/dkg/round1":
-		if enclaveURL != "" {
-			resp, err = proxyToEnclave(enclaveURL, "/dkg/round1", request.Body)
-		} else {
-			resp, err = handleDKGRound1(request.Body)
-		}
-	case "POST /v1/dkg/complete":
-		if enclaveURL != "" {
-			resp, err = proxyToEnclave(enclaveURL, "/dkg/complete", request.Body)
-		} else {
-			resp, err = handleDKGComplete(request.Body)
-		}
-		// Store wallet with sealed Share B after successful DKG complete
-		if err == nil && resp.StatusCode == 200 {
-			storeWalletFromComplete(ctx, dbClient, resp.Body, request.Body)
-		}
+	case "POST /v1/signal/keys/upload":
+		resp, err = handleSignalKeyUpload(ctx, dbClient, request.Headers, request.Body)
+	case "GET /v1/signal/keys/bundle":
+		resp, err = handleSignalKeyBundle(ctx, dbClient, request.Headers, request.QueryStringParameters)
+	case "POST /v1/signal/keys/replenish":
+		resp, err = handleSignalKeyReplenish(ctx, dbClient, request.Headers, request.Body)
+	case "GET /v1/signal/keys/count":
+		resp, err = handleSignalKeyCount(ctx, dbClient, request.Headers, request.QueryStringParameters)
+	case "POST /v2/dkg/session":
+		resp, err = handleFrostDKGSession(ctx, dbClient, request.Headers)
+	case "POST /v2/dkg/round1":
+		resp, err = handleFrostDKGRound1(enclaveURL, request.Body)
+	case "POST /v2/dkg/complete":
+		resp, err = handleFrostDKGComplete(ctx, dbClient, enclaveURL, request.Body)
+	case "POST /v2/sign/begin":
+		resp, err = handleFrostSignBegin(enclaveURL, request.Body)
+	case "POST /v2/sign/finish":
+		resp, err = handleFrostSignFinish(enclaveURL, request.Body)
 	default:
 		resp, _ = jsonResp(404, map[string]string{"error": "not found"})
 	}
@@ -183,47 +182,6 @@ func corsResponse(resp events.APIGatewayV2HTTPResponse, origin string) events.AP
 }
 
 var enclaveHTTPClient = &http.Client{Timeout: 8 * time.Second}
-
-func storeWalletFromComplete(ctx context.Context, db *dynamodb.Client, respBody string, requestBody string) {
-	var data dkgCompleteResponse
-	if err := json.Unmarshal([]byte(respBody), &data); err != nil {
-		log.Printf("failed to parse DKG complete response for wallet storage: %v", err)
-		return
-	}
-
-	if data.SealedShareB == "" {
-		log.Printf("no sealed_share_b in DKG complete response")
-		return
-	}
-
-	// Get user from DKG session in DynamoDB
-	var reqBody dkgCompleteRequest
-	userID := ""
-	if err := json.Unmarshal([]byte(requestBody), &reqBody); err == nil && reqBody.SessionID != "" {
-		sess, err := getDKGSession(ctx, db, reqBody.SessionID)
-		if err != nil {
-			log.Printf("failed to look up DKG session %s: %v", reqBody.SessionID, err)
-		} else if sess != nil {
-			userID = sess.UserID
-		}
-	}
-
-	item := WalletItem{
-		PK:             "WALLET#" + data.JointPublicKey,
-		SK:             "DATA",
-		UserID:         userID,
-		JointPublicKey: data.JointPublicKey,
-		SealedShareB:   data.SealedShareB,
-		SealMode:       data.SealMode,
-		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
-	}
-
-	if err := putWallet(ctx, db, item); err != nil {
-		log.Printf("failed to store wallet: %v", err)
-		return
-	}
-	log.Printf("wallet stored for joint key %s", data.JointPublicKey[:16]+"...")
-}
 
 func checkEnclaveHealth() {
 	if enclaveURL == "" {

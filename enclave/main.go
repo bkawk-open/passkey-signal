@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"passkey-enclave/dkg"
+	frostpkg "passkey-enclave/frost"
 	"passkey-enclave/seal"
 )
 
@@ -21,7 +21,7 @@ func main() {
 	// MockSealer is only allowed in dev mode (no NSM device).
 	if _, err := os.Stat("/dev/nsm"); err == nil {
 		log.Println("NSM device found - using KMS sealer")
-		dkg.Sealer = seal.NewKMSSealer("alias/passkey-signal-enclave-seal", "us-east-1")
+		frostpkg.Sealer = seal.NewKMSSealer("alias/passkey-signal-enclave-seal", "us-east-1")
 	} else if *tcpAddr != "" {
 		log.Println("Dev mode (TCP + no NSM) - using mock sealer")
 	} else {
@@ -29,8 +29,10 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /dkg/round1", handleRound1)
-	mux.HandleFunc("POST /dkg/complete", handleComplete)
+	mux.HandleFunc("POST /frost/dkg/round1", handleFrostDKGRound1)
+	mux.HandleFunc("POST /frost/dkg/complete", handleFrostDKGComplete)
+	mux.HandleFunc("POST /frost/sign/begin", handleFrostSignBegin)
+	mux.HandleFunc("POST /frost/sign/finish", handleFrostSignFinish)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -40,7 +42,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(1 * time.Minute)
-			dkg.CleanExpiredSessions()
+			frostpkg.CleanExpiredSessions()
 		}
 	}()
 
@@ -65,25 +67,43 @@ func main() {
 	log.Fatal(server.Serve(listener))
 }
 
-func handleRound1(w http.ResponseWriter, r *http.Request) {
-	var req dkg.Round1Request
+func handleFrostDKGRound1(w http.ResponseWriter, r *http.Request) {
+	var req frostpkg.DKGRound1Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid JSON", "code": "INVALID_REQUEST"})
 		return
 	}
-
-	status, resp := dkg.HandleRound1(req)
+	status, resp := frostpkg.HandleDKGRound1(req)
 	writeJSON(w, status, resp)
 }
 
-func handleComplete(w http.ResponseWriter, r *http.Request) {
-	var req dkg.CompleteRequest
+func handleFrostDKGComplete(w http.ResponseWriter, r *http.Request) {
+	var req frostpkg.DKGCompleteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid JSON", "code": "INVALID_REQUEST"})
 		return
 	}
+	status, resp := frostpkg.HandleDKGComplete(req)
+	writeJSON(w, status, resp)
+}
 
-	status, resp := dkg.HandleComplete(req)
+func handleFrostSignBegin(w http.ResponseWriter, r *http.Request) {
+	var req frostpkg.SignBeginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "invalid JSON", "code": "INVALID_REQUEST"})
+		return
+	}
+	status, resp := frostpkg.HandleSignBegin(req)
+	writeJSON(w, status, resp)
+}
+
+func handleFrostSignFinish(w http.ResponseWriter, r *http.Request) {
+	var req frostpkg.SignFinishRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "invalid JSON", "code": "INVALID_REQUEST"})
+		return
+	}
+	status, resp := frostpkg.HandleSignFinish(req)
 	writeJSON(w, status, resp)
 }
 

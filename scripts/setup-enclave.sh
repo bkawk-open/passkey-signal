@@ -57,7 +57,7 @@ echo "==> Packaging enclave source..."
 TARBALL="/tmp/enclave-source.tar.gz"
 tar -czf "$TARBALL" -C "$PROJECT_DIR" \
     enclave/main.go enclave/vsock.go enclave/go.mod enclave/go.sum \
-    enclave/Dockerfile enclave/dkg/ enclave/seal/ \
+    enclave/Dockerfile enclave/frost/ enclave/seal/ \
     scripts/build-eif.sh scripts/run-enclave.sh scripts/stop-enclave.sh
 
 echo "==> Uploading to s3://${BUCKET}/enclave-source.tar.gz..."

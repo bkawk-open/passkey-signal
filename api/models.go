@@ -159,13 +159,48 @@ type DKGSessionItem struct {
 }
 
 type WalletItem struct {
-	PK             string `dynamodbav:"PK"`
-	SK             string `dynamodbav:"SK"`
-	UserID         string `dynamodbav:"UserID"`
-	JointPublicKey string `dynamodbav:"JointPublicKey"`
-	SealedShareB   string `dynamodbav:"SealedShareB"`
-	SealMode       string `dynamodbav:"SealMode"` // "mock" or "kms"
-	CreatedAt      string `dynamodbav:"CreatedAt"`
+	PK               string `dynamodbav:"PK"`
+	SK               string `dynamodbav:"SK"`
+	UserID           string `dynamodbav:"UserID"`
+	JointPublicKey   string `dynamodbav:"JointPublicKey"`
+	SealedShareB     string `dynamodbav:"SealedShareB"`
+	SealMode         string `dynamodbav:"SealMode"`                       // "mock" or "kms"
+	GroupCommitments string `dynamodbav:"GroupCommitments,omitempty"`
+	CreatedAt        string `dynamodbav:"CreatedAt"`
+}
+
+// Signal Protocol key items.
+
+type SignalIdentityItem struct {
+	PK               string `dynamodbav:"PK"`
+	SK               string `dynamodbav:"SK"`
+	CredentialID     string `dynamodbav:"CredentialID"`
+	IdentityPublicKey string `dynamodbav:"IdentityPublicKey"` // Ed25519, base64url
+	CreatedAt        string `dynamodbav:"CreatedAt"`
+}
+
+type SignalSignedPreKeyItem struct {
+	PK                  string `dynamodbav:"PK"`
+	SK                  string `dynamodbav:"SK"`
+	KeyID               int    `dynamodbav:"KeyID"`
+	PublicKey           string `dynamodbav:"PublicKey"`
+	Signature           string `dynamodbav:"Signature"`
+	EncryptedPrivateKey string `dynamodbav:"EncryptedPrivateKey"`
+	IV                  string `dynamodbav:"IV"`
+	Salt                string `dynamodbav:"Salt"`
+	ExpiresAt           string `dynamodbav:"ExpiresAt,omitempty"`
+	CreatedAt           string `dynamodbav:"CreatedAt"`
+}
+
+type SignalOneTimePreKeyItem struct {
+	PK                  string `dynamodbav:"PK"`
+	SK                  string `dynamodbav:"SK"`
+	KeyID               int    `dynamodbav:"KeyID"`
+	PublicKey           string `dynamodbav:"PublicKey"`
+	EncryptedPrivateKey string `dynamodbav:"EncryptedPrivateKey"`
+	IV                  string `dynamodbav:"IV"`
+	Salt                string `dynamodbav:"Salt"`
+	Consumed            bool   `dynamodbav:"Consumed"`
 }
 
 // Conversion functions.

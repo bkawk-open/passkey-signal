@@ -550,6 +550,15 @@
                 body: JSON.stringify({ credentialId: credentialId, wrappedKey: wrappedB64 }),
             });
 
+            // Generate Signal keys for this new passkey
+            if (prfResult) {
+                try {
+                    await Signal.ensureSignalKeys(API, token, prfResult, credentialId);
+                } catch (sigErr) {
+                    console.error('Signal key setup for new passkey failed:', sigErr);
+                }
+            }
+
             $ps.textContent = 'Passkey verified and linked.';
             loadPasskeys();
         } catch (e) {
@@ -1140,6 +1149,15 @@
                     body: JSON.stringify({ inviteId: inviteId }),
                 });
 
+                // Generate Signal keys for this new passkey
+                if (prfResult) {
+                    try {
+                        await Signal.ensureSignalKeys(API, authToken, prfResult, finishResp.credentialId);
+                    } catch (sigErr) {
+                        console.error('Signal key setup for linked device failed:', sigErr);
+                    }
+                }
+
                 // Success — transition to logged-in state
                 masterKey = decryptedMK;
                 cleanInviteUrl();
@@ -1275,30 +1293,38 @@
                     $rs.textContent = 'Setting up your wallet...';
                     var prfBytes = new Uint8Array(prfResult);
 
-                    var dkgSession = await api('/v1/dkg/session', {
+                    var frostSession = await api('/v2/dkg/session', {
                         method: 'POST',
                         headers: { Authorization: 'Bearer ' + token },
                     });
+                    if (frostSession.session_id) {
+                        $rs.textContent = 'Generating wallet keys (FROST)...';
+                        walletData = await FROST.runDKG(API, frostSession.session_id, token);
+                        console.log('FROST DKG complete:', walletData);
+                    }
 
-                    if (dkgSession.session_id) {
-                        $rs.textContent = 'Generating wallet keys...';
-                        walletData = await DKG.runClientDKG(API, dkgSession.session_id, prfBytes, token);
-                        console.log('DKG complete:', walletData);
-
-                        // Persist wallet data as encrypted note
-                        if (masterKey) {
-                            var encrypted = await encryptNote(masterKey, JSON.stringify(walletData));
-                            await api('/note', {
-                                method: 'PUT',
-                                headers: { Authorization: 'Bearer ' + token },
-                                body: JSON.stringify({ ciphertext: encrypted.ciphertext, iv: encrypted.iv }),
-                            });
-                            console.log('Wallet data saved to note');
-                        }
+                    // Persist wallet data as encrypted note
+                    if (walletData && masterKey) {
+                        var encrypted = await encryptNote(masterKey, JSON.stringify(walletData));
+                        await api('/note', {
+                            method: 'PUT',
+                            headers: { Authorization: 'Bearer ' + token },
+                            body: JSON.stringify({ ciphertext: encrypted.ciphertext, iv: encrypted.iv }),
+                        });
+                        console.log('Wallet data saved to note');
                     }
                 } catch (dkgErr) {
                     console.error('DKG failed:', dkgErr);
                     $rs.textContent = 'Wallet setup failed: ' + dkgErr.message;
+                }
+            }
+
+            // --- Signal: Ensure per-credential keys are uploaded ---
+            if (prfResult && result.credentialId) {
+                try {
+                    await Signal.ensureSignalKeys(API, token, prfResult, result.credentialId);
+                } catch (sigErr) {
+                    console.error('Signal key setup failed:', sigErr);
                 }
             }
 
@@ -1356,7 +1382,8 @@
 
             var statusRow = document.createElement('div');
             statusRow.className = 'wallet-addr';
-            statusRow.innerHTML = '<strong>Seed</strong> <code>' + walletData.jointPublicKey.slice(0, 16) + '...</code>';
+            var walletKey = walletData.verificationKey || walletData.jointPublicKey || '';
+            statusRow.innerHTML = '<strong>Seed</strong> <code>' + walletKey.slice(0, 16) + '...</code>';
             walletDiv.appendChild(statusRow);
 
             $noteSection.appendChild(walletDiv);
@@ -1584,29 +1611,37 @@
                 setState(State.DKG_SETUP);
                 var prfBytes = new Uint8Array(prfResult);
 
-                var dkgSession = await api('/v1/dkg/session', {
+                var frostSession = await api('/v2/dkg/session', {
                     method: 'POST',
                     headers: { Authorization: 'Bearer ' + result.token },
                 });
+                if (frostSession.session_id) {
+                    if ($dkgStatus) $dkgStatus.textContent = 'Generating wallet keys (FROST)...';
+                    walletData = await FROST.runDKG(API, frostSession.session_id, result.token);
+                    console.log('FROST DKG complete:', walletData);
+                }
 
-                if (dkgSession.session_id) {
-                    if ($dkgStatus) $dkgStatus.textContent = 'Generating wallet keys...';
-                    walletData = await DKG.runClientDKG(API, dkgSession.session_id, prfBytes, result.token);
-                    console.log('DKG complete:', walletData);
-
-                    // Persist wallet data as encrypted note
-                    if (masterKey) {
-                        var encrypted = await encryptNote(masterKey, JSON.stringify(walletData));
-                        await api('/note', {
-                            method: 'PUT',
-                            headers: { Authorization: 'Bearer ' + result.token },
-                            body: JSON.stringify({ ciphertext: encrypted.ciphertext, iv: encrypted.iv }),
-                        });
-                        console.log('Wallet data saved to note');
-                    }
+                // Persist wallet data as encrypted note
+                if (walletData && masterKey) {
+                    var encrypted = await encryptNote(masterKey, JSON.stringify(walletData));
+                    await api('/note', {
+                        method: 'PUT',
+                        headers: { Authorization: 'Bearer ' + result.token },
+                        body: JSON.stringify({ ciphertext: encrypted.ciphertext, iv: encrypted.iv }),
+                    });
+                    console.log('Wallet data saved to note');
                 }
             } catch (dkgErr) {
                 console.error('DKG failed:', dkgErr);
+            }
+        }
+
+        // --- Signal: Ensure per-credential keys are uploaded ---
+        if (prfResult && result.credentialId) {
+            try {
+                await Signal.ensureSignalKeys(API, result.token, prfResult, result.credentialId);
+            } catch (sigErr) {
+                console.error('Signal key setup failed:', sigErr);
             }
         }
 

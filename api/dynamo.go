@@ -711,6 +711,213 @@ func consumeDeviceChallenge(ctx context.Context, db *dynamodb.Client, challengeI
 	return &item, nil
 }
 
+// Signal Protocol Keys
+
+func putSignalIdentity(ctx context.Context, db *dynamodb.Client, item SignalIdentityItem) error {
+	av, err := attributevalue.MarshalMap(item)
+	if err != nil {
+		return err
+	}
+	_, err = db.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: &tableName,
+		Item:      av,
+	})
+	return err
+}
+
+func getSignalIdentity(ctx context.Context, db *dynamodb.Client, phone string, credID string) (*SignalIdentityItem, error) {
+	out, err := db.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: &tableName,
+		Key: map[string]types.AttributeValue{
+			"PK": &types.AttributeValueMemberS{Value: "USER#" + phone},
+			"SK": &types.AttributeValueMemberS{Value: "SIGIDENT#" + credID},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if out.Item == nil {
+		return nil, nil
+	}
+	var item SignalIdentityItem
+	if err := attributevalue.UnmarshalMap(out.Item, &item); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func putSignalSignedPreKey(ctx context.Context, db *dynamodb.Client, item SignalSignedPreKeyItem) error {
+	av, err := attributevalue.MarshalMap(item)
+	if err != nil {
+		return err
+	}
+	_, err = db.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: &tableName,
+		Item:      av,
+	})
+	return err
+}
+
+func getSignalSignedPreKey(ctx context.Context, db *dynamodb.Client, phone string, credID string) (*SignalSignedPreKeyItem, error) {
+	out, err := db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              &tableName,
+		KeyConditionExpression: aws.String("PK = :pk AND begins_with(SK, :sk)"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk": &types.AttributeValueMemberS{Value: "USER#" + phone},
+			":sk": &types.AttributeValueMemberS{Value: "SIGSPK#" + credID + "#"},
+		},
+		ScanIndexForward: aws.Bool(false),
+		Limit:            aws.Int32(1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(out.Items) == 0 {
+		return nil, nil
+	}
+	var item SignalSignedPreKeyItem
+	if err := attributevalue.UnmarshalMap(out.Items[0], &item); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func putSignalOneTimePreKeys(ctx context.Context, db *dynamodb.Client, items []SignalOneTimePreKeyItem) error {
+	for i := 0; i < len(items); i += 25 {
+		end := i + 25
+		if end > len(items) {
+			end = len(items)
+		}
+		var writeRequests []types.WriteRequest
+		for _, item := range items[i:end] {
+			av, err := attributevalue.MarshalMap(item)
+			if err != nil {
+				return err
+			}
+			writeRequests = append(writeRequests, types.WriteRequest{
+				PutRequest: &types.PutRequest{Item: av},
+			})
+		}
+		_, err := db.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+			RequestItems: map[string][]types.WriteRequest{
+				tableName: writeRequests,
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// consumeSignalOneTimePreKey atomically finds and marks one unconsumed OTPK as consumed.
+func consumeSignalOneTimePreKey(ctx context.Context, db *dynamodb.Client, phone string, credID string) (*SignalOneTimePreKeyItem, error) {
+	// Query for unconsumed OTPKs
+	out, err := db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              &tableName,
+		KeyConditionExpression: aws.String("PK = :pk AND begins_with(SK, :sk)"),
+		FilterExpression:       aws.String("#consumed = :false"),
+		ExpressionAttributeNames: map[string]string{"#consumed": "Consumed"},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk":    &types.AttributeValueMemberS{Value: "USER#" + phone},
+			":sk":    &types.AttributeValueMemberS{Value: "SIGOTPK#" + credID + "#"},
+			":false": &types.AttributeValueMemberBOOL{Value: false},
+		},
+		Limit: aws.Int32(1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(out.Items) == 0 {
+		return nil, nil
+	}
+
+	var item SignalOneTimePreKeyItem
+	if err := attributevalue.UnmarshalMap(out.Items[0], &item); err != nil {
+		return nil, err
+	}
+
+	// Atomically mark as consumed
+	_, err = db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: &tableName,
+		Key: map[string]types.AttributeValue{
+			"PK": &types.AttributeValueMemberS{Value: item.PK},
+			"SK": &types.AttributeValueMemberS{Value: item.SK},
+		},
+		UpdateExpression:    aws.String("SET #consumed = :true"),
+		ConditionExpression: aws.String("#consumed = :false"),
+		ExpressionAttributeNames: map[string]string{"#consumed": "Consumed"},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":true":  &types.AttributeValueMemberBOOL{Value: true},
+			":false": &types.AttributeValueMemberBOOL{Value: false},
+		},
+	})
+	if err != nil {
+		var condErr *types.ConditionalCheckFailedException
+		if errors.As(err, &condErr) {
+			// Race condition — another request consumed it first, return nil
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &item, nil
+}
+
+func countUnconsumedOTPKs(ctx context.Context, db *dynamodb.Client, phone string, credID string) (int, int, error) {
+	out, err := db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              &tableName,
+		KeyConditionExpression: aws.String("PK = :pk AND begins_with(SK, :sk)"),
+		FilterExpression:       aws.String("#consumed = :false"),
+		ExpressionAttributeNames: map[string]string{"#consumed": "Consumed"},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk":    &types.AttributeValueMemberS{Value: "USER#" + phone},
+			":sk":    &types.AttributeValueMemberS{Value: "SIGOTPK#" + credID + "#"},
+			":false": &types.AttributeValueMemberBOOL{Value: false},
+		},
+		Select: types.SelectCount,
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Also query all OTPKs to find max key ID for nextKeyId
+	allOut, err := db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              &tableName,
+		KeyConditionExpression: aws.String("PK = :pk AND begins_with(SK, :sk)"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk": &types.AttributeValueMemberS{Value: "USER#" + phone},
+			":sk": &types.AttributeValueMemberS{Value: "SIGOTPK#" + credID + "#"},
+		},
+		Select:           types.SelectCount,
+	})
+	if err != nil {
+		return int(out.Count), 0, err
+	}
+
+	return int(out.Count), int(allOut.Count) + 1, nil
+}
+
+// Signal identity items for all credentials of a user (for bundle fetch by phone)
+func getUserSignalIdentities(ctx context.Context, db *dynamodb.Client, phone string) ([]SignalIdentityItem, error) {
+	out, err := db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              &tableName,
+		KeyConditionExpression: aws.String("PK = :pk AND begins_with(SK, :sk)"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk": &types.AttributeValueMemberS{Value: "USER#" + phone},
+			":sk": &types.AttributeValueMemberS{Value: "SIGIDENT#"},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var items []SignalIdentityItem
+	if err := attributevalue.UnmarshalListOfMaps(out.Items, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func putDKGSession(ctx context.Context, db *dynamodb.Client, item DKGSessionItem) error {
 	av, err := attributevalue.MarshalMap(item)
 	if err != nil {

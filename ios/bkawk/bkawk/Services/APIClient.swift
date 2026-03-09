@@ -99,11 +99,27 @@ struct ErrorResponse: Decodable, Sendable {
     let error: String
 }
 
+// MARK: - Signal Key Types
+
+struct SignalKeyCountResponse: Decodable, Sendable {
+    let count: Int
+    let nextKeyId: Int
+    let hasIdentity: Bool
+}
+
+struct SignalKeyUploadResponse: Decodable, Sendable {
+    let status: String
+}
+
+struct SignalKeyReplenishResponse: Decodable, Sendable {
+    let status: String
+}
+
 // MARK: - API Client
 
 final class APIClient {
     static let shared = APIClient()
-    private let baseURL = "https://api.passkey-ios.bkawk.com"
+    private let baseURL = "https://api.passkey-signal.bkawk.com"
 
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
@@ -251,5 +267,61 @@ final class APIClient {
             body: PutNoteRequest(ciphertext: ciphertext, iv: iv),
             token: token
         )
+    }
+
+    // MARK: - Signal Keys
+
+    func signalKeyCount(token: String, credentialId: String) async throws -> SignalKeyCountResponse {
+        try await request(
+            method: "GET",
+            path: "/v1/signal/keys/count?credentialId=\(credentialId)",
+            token: token
+        )
+    }
+
+    func signalKeyUpload(token: String, bundle: [String: Any]) async throws {
+        guard let url = URL(string: baseURL + "/v1/signal/keys/upload") else {
+            throw APIError.httpError(0, "Invalid URL")
+        }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: bundle)
+
+        let (data, response) = try await session.data(for: req)
+        guard let httpResp = response as? HTTPURLResponse else {
+            throw APIError.networkError(URLError(.badServerResponse))
+        }
+        if httpResp.statusCode >= 400 {
+            if let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                throw APIError.httpError(httpResp.statusCode, errResp.error)
+            }
+            throw APIError.httpError(httpResp.statusCode, "HTTP \(httpResp.statusCode)")
+        }
+    }
+
+    func signalKeyReplenish(token: String, payload: [String: Any]) async throws {
+        guard let url = URL(string: baseURL + "/v1/signal/keys/replenish") else {
+            throw APIError.httpError(0, "Invalid URL")
+        }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await session.data(for: req)
+        guard let httpResp = response as? HTTPURLResponse else {
+            throw APIError.networkError(URLError(.badServerResponse))
+        }
+        if httpResp.statusCode >= 400 {
+            if let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                throw APIError.httpError(httpResp.statusCode, errResp.error)
+            }
+            throw APIError.httpError(httpResp.statusCode, "HTTP \(httpResp.statusCode)")
+        }
     }
 }

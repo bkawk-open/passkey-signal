@@ -13,6 +13,7 @@ struct EnrolmentView: View {
         case connectingAccount
         case receivingKey
         case storingCredentials
+        case signalKeys
         case complete
 
         var label: String {
@@ -22,6 +23,7 @@ struct EnrolmentView: View {
             case .connectingAccount: return "Connecting account"
             case .receivingKey: return "Receiving encryption key"
             case .storingCredentials: return "Storing credentials"
+            case .signalKeys: return "Setting up messaging keys"
             case .complete: return "Complete"
             }
         }
@@ -33,6 +35,7 @@ struct EnrolmentView: View {
             case .connectingAccount: return "link"
             case .receivingKey: return "arrow.down.circle"
             case .storingCredentials: return "lock.shield"
+            case .signalKeys: return "envelope.badge.shield.half.filled"
             case .complete: return "checkmark.circle.fill"
             }
         }
@@ -292,6 +295,24 @@ struct EnrolmentView: View {
             try keychain.storeDeviceId(deviceId)
 
             _ = try await apiClient.completeEnrolment(enrolId: enrolId, deviceId: deviceId, enrolSecret: enrolSecret)
+
+            try Task.checkCancellation()
+
+            // Step 5b: Generate and upload Signal keys
+            withAnimation { currentStep = .signalKeys }
+
+            // Device auth to get a token for Signal key upload
+            let authResp = try await apiClient.deviceAuth(deviceId: deviceId)
+            let challengeData = crypto.base64urlDecode(authResp.challenge) ?? Data()
+            let signature = try se.signChallenge(challengeData, context: context)
+            let signatureB64 = crypto.base64urlEncode(signature)
+            let verifyResp = try await apiClient.deviceVerify(
+                challengeId: authResp.challengeId,
+                deviceId: deviceId,
+                signature: signatureB64
+            )
+
+            try await SignalKeyService.shared.ensureSignalKeys(token: verifyResp.token, deviceId: deviceId)
 
             try Task.checkCancellation()
 

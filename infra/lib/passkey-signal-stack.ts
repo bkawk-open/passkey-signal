@@ -286,7 +286,7 @@ export class PasskeySignalStack extends cdk.Stack {
     const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
       securityHeadersBehavior: {
         contentSecurityPolicy: {
-          contentSecurityPolicy: "default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://api.passkey-signal.bkawk.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+          contentSecurityPolicy: "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self' https://api.passkey-signal.bkawk.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
           override: true,
         },
         strictTransportSecurity: {

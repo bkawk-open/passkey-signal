@@ -1771,31 +1771,6 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func handleDKGSession(ctx context.Context, db *dynamodb.Client, headers map[string]string) (events.APIGatewayV2HTTPResponse, error) {
-	tok, err := authenticateRequest(ctx, db, headers)
-	if err != nil || tok == nil {
-		return jsonResp(401, map[string]string{"error": "unauthorized"})
-	}
-
-	sessionID := uuid.New().String()
-	expires := time.Now().Add(10 * time.Minute)
-	if err := putDKGSession(ctx, db, DKGSessionItem{
-		PK:        "DKG#" + sessionID,
-		SK:        "SESSION",
-		UserID:    tok.UserID,
-		Phone:     tok.Phone,
-		ExpiresAt: expires.UTC().Format(time.RFC3339),
-		TTL:       expires.Unix(),
-	}); err != nil {
-		return jsonResp(500, map[string]string{"error": "session creation failed"})
-	}
-
-	return jsonResp(200, map[string]interface{}{
-		"session_id": sessionID,
-		"expires_at": expires.UTC().Format(time.RFC3339),
-	})
-}
-
 func jsonResp(status int, body interface{}) (events.APIGatewayV2HTTPResponse, error) {
 	data, _ := json.Marshal(body)
 	return events.APIGatewayV2HTTPResponse{

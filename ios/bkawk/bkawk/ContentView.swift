@@ -188,6 +188,14 @@ struct ContentView: View {
 
             try keychain.storeAuthToken(verifyResp.token)
 
+            // Ensure Signal keys are uploaded for this device
+            do {
+                try await SignalKeyService.shared.ensureSignalKeys(token: verifyResp.token, deviceId: deviceId)
+            } catch {
+                // Non-fatal — don't block login if Signal key setup fails
+                print("Signal key setup failed: \(error)")
+            }
+
             // Brief success state before showing notes
             withAnimation {
                 appState = .authSuccess(
