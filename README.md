@@ -170,33 +170,33 @@ scripts/                      # Deployment automation
 ## API Endpoints
 
 ### Authentication
-- `POST /auth/otp/request` - Send SMS OTP
-- `POST /auth/otp/verify` - Verify OTP, return auth token
-- `POST /auth/passkey/register/begin` - Start passkey registration
-- `POST /auth/passkey/register/finish` - Complete passkey registration
-- `POST /auth/passkey/auth/begin` - Start passkey authentication
-- `POST /auth/passkey/auth/finish` - Complete passkey authentication
+- `POST /auth/otp/request` — Send SMS OTP
+- `POST /auth/otp/verify` — Verify OTP, return auth token
+- `POST /auth/passkey/register/begin` — Start passkey registration
+- `POST /auth/passkey/register/finish` — Complete passkey registration
+- `POST /auth/passkey/auth/begin` — Start passkey authentication
+- `POST /auth/passkey/auth/finish` — Complete passkey authentication
 
 ### FROST DKG + Signing
-- `POST /v2/dkg/session` - Create FROST DKG session
-- `POST /v2/dkg/round1` - Commitment exchange
-- `POST /v2/dkg/round2` - Share exchange
-- `POST /v2/dkg/complete` - Finalize, seal enclave share
-- `POST /v2/sign/begin` - Nonce commitments
-- `POST /v2/sign/finish` - Aggregate partial signatures
+- `POST /v2/dkg/session` — Create FROST DKG session
+- `POST /v2/dkg/round1` — Commitment exchange
+- `POST /v2/dkg/round2` — Share exchange
+- `POST /v2/dkg/complete` — Finalize, seal enclave share
+- `POST /v2/sign/begin` — Nonce commitments
+- `POST /v2/sign/finish` — Aggregate partial signatures
 
 ### Signal Keys
-- `POST /v1/signal/keys/upload` - Upload identity + signed prekey + OTPKs
-- `GET /v1/signal/keys/bundle` - Fetch PreKey bundle (consumes one OTPK)
-- `POST /v1/signal/keys/replenish` - Upload more OTPKs
-- `GET /v1/signal/keys/count` - Check remaining unused OTPKs
+- `POST /v1/signal/keys/upload` — Upload identity + signed prekey + OTPKs
+- `GET /v1/signal/keys/bundle` — Fetch PreKey bundle (consumes one OTPK)
+- `POST /v1/signal/keys/replenish` — Upload more OTPKs
+- `GET /v1/signal/keys/count` — Check remaining unused OTPKs
 
 ### Device Management
-- `POST /device/enrol/redeem` - Redeem QR enrollment token
-- `GET /device/enrol/receive` - Poll for master key delivery
-- `POST /device/enrol/complete` - Finalize device enrollment
-- `POST /device/auth` - Request device auth challenge
-- `POST /device/verify` - Verify device signature
+- `POST /device/enrol/redeem` — Redeem QR enrollment token
+- `GET /device/enrol/receive` — Poll for master key delivery
+- `POST /device/enrol/complete` — Finalize device enrollment
+- `POST /device/auth` — Request device auth challenge
+- `POST /device/verify` — Verify device signature
 
 ## Deploy
 
