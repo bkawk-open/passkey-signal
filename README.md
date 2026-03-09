@@ -1,6 +1,6 @@
 # Passkey Signal
 
-Passwordless authentication with **FROST threshold signing** (2-of-2) inside an **AWS Nitro Enclave** and **Signal Protocol key infrastructure** for future end-to-end encrypted messaging. Users authenticate via WebAuthn passkeys and SMS OTP. The system generates a secp256k1 wallet where the private key is **never reconstructed** — each party computes a partial signature and the enclave aggregates.
+Passwordless authentication with **FROST threshold signing** (2-of-2) inside an **AWS Nitro Enclave** and **Signal Protocol key infrastructure** for future end-to-end encrypted messaging. Users authenticate via WebAuthn passkeys and SMS OTP. The system generates a secp256k1 wallet where the private key is **never reconstructed**. Each party computes a partial signature and the enclave aggregates.
 
 ## Architecture
 
@@ -42,12 +42,12 @@ The full private key never exists in memory on either side. During signing, each
 
 ### Security Model
 
-This is a **split-key custody** system — neither the user nor the server can sign alone. It sits between full self-custody and traditional custodial services.
+This is a **split-key custody** system. Neither the user nor the server can sign alone. It sits between full self-custody and traditional custodial services.
 
 **What's guaranteed:**
 - The user's signing share never leaves their device (derived from WebAuthn PRF, protected by biometrics)
 - The enclave's signing share is sealed to attested code (KMS bound to PCR0)
-- Both shares are required to produce a valid signature — a compromised server alone cannot sign
+- Both shares are required to produce a valid signature. A compromised server alone cannot sign
 - Enclave code is open source and the attestation hash (PCR0) is publicly verifiable
 
 **What requires trust:**
@@ -55,7 +55,7 @@ This is a **split-key custody** system — neither the user nor the server can s
 - The web frontend is served by the operator (the iOS app, distributed via App Store, avoids this)
 - Users trust that the published source matches what's running (attestation proves it at any point in time, but doesn't prevent future changes)
 
-**Comparable to:** Fireblocks, Turnkey, Fordefi — institutional MPC/enclave wallets that split keys between client and server-side secure hardware. Stronger than custodial exchanges where the operator holds all keys.
+**Comparable to:** Fireblocks, Turnkey, Fordefi. Institutional MPC/enclave wallets that split keys between client and server-side secure hardware. Stronger than custodial exchanges where the operator holds all keys.
 
 ### Signal Protocol Keys (per credential)
 
@@ -170,33 +170,33 @@ scripts/                      # Deployment automation
 ## API Endpoints
 
 ### Authentication
-- `POST /auth/otp/request` — Send SMS OTP
-- `POST /auth/otp/verify` — Verify OTP, return auth token
-- `POST /auth/passkey/register/begin` — Start passkey registration
-- `POST /auth/passkey/register/finish` — Complete passkey registration
-- `POST /auth/passkey/auth/begin` — Start passkey authentication
-- `POST /auth/passkey/auth/finish` — Complete passkey authentication
+- `POST /auth/otp/request` - Send SMS OTP
+- `POST /auth/otp/verify` - Verify OTP, return auth token
+- `POST /auth/passkey/register/begin` - Start passkey registration
+- `POST /auth/passkey/register/finish` - Complete passkey registration
+- `POST /auth/passkey/auth/begin` - Start passkey authentication
+- `POST /auth/passkey/auth/finish` - Complete passkey authentication
 
 ### FROST DKG + Signing
-- `POST /v2/dkg/session` — Create FROST DKG session
-- `POST /v2/dkg/round1` — Commitment exchange
-- `POST /v2/dkg/round2` — Share exchange
-- `POST /v2/dkg/complete` — Finalize, seal enclave share
-- `POST /v2/sign/begin` — Nonce commitments
-- `POST /v2/sign/finish` — Aggregate partial signatures
+- `POST /v2/dkg/session` - Create FROST DKG session
+- `POST /v2/dkg/round1` - Commitment exchange
+- `POST /v2/dkg/round2` - Share exchange
+- `POST /v2/dkg/complete` - Finalize, seal enclave share
+- `POST /v2/sign/begin` - Nonce commitments
+- `POST /v2/sign/finish` - Aggregate partial signatures
 
 ### Signal Keys
-- `POST /v1/signal/keys/upload` — Upload identity + signed prekey + OTPKs
-- `GET /v1/signal/keys/bundle` — Fetch PreKey bundle (consumes one OTPK)
-- `POST /v1/signal/keys/replenish` — Upload more OTPKs
-- `GET /v1/signal/keys/count` — Check remaining unused OTPKs
+- `POST /v1/signal/keys/upload` - Upload identity + signed prekey + OTPKs
+- `GET /v1/signal/keys/bundle` - Fetch PreKey bundle (consumes one OTPK)
+- `POST /v1/signal/keys/replenish` - Upload more OTPKs
+- `GET /v1/signal/keys/count` - Check remaining unused OTPKs
 
 ### Device Management
-- `POST /device/enrol/redeem` — Redeem QR enrollment token
-- `GET /device/enrol/receive` — Poll for master key delivery
-- `POST /device/enrol/complete` — Finalize device enrollment
-- `POST /device/auth` — Request device auth challenge
-- `POST /device/verify` — Verify device signature
+- `POST /device/enrol/redeem` - Redeem QR enrollment token
+- `GET /device/enrol/receive` - Poll for master key delivery
+- `POST /device/enrol/complete` - Finalize device enrollment
+- `POST /device/auth` - Request device auth challenge
+- `POST /device/verify` - Verify device signature
 
 ## Deploy
 
